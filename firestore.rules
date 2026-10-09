@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Public profile: name, username and favorites. Only the owner can write it.
+    match /users/{uid} {
+      allow read: if true;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.username is string
+        && request.resource.data.username.size() <= 20;
+      allow delete: if false;
+    }
+
+    // One document per person and item: "<uid>_<itemId>". Anyone can read (community averages).
+    match /ratings/{docId} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && docId == request.auth.uid + '_' + request.resource.data.item
+        && request.resource.data.v is number
+        && request.resource.data.v >= 0.5 && request.resource.data.v <= 5
+        && (request.resource.data.v * 2) % 1 == 0;
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
+    // Diary entries and reviews. Anyone can read; only the author can write or delete.
+    match /diary/{entryId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 5000;
+      allow update, delete: if request.auth != null && resource.data.uid == request.auth.uid
+        && (request.method == 'delete' || request.resource.data.uid == request.auth.uid);
+    }
+  }
+}
